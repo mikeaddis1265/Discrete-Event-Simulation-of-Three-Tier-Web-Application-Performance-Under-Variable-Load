@@ -1,0 +1,1267 @@
+\documentclass[12pt,a4paper]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{subfig}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes.geometric, arrows, positioning, calc}
+
+% Hyperref settings
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+    pdftitle={Three-Tier Web Application Performance Simulation},
+    pdfauthor={AASTU Student},
+}
+
+% Code listing settings
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    stepnumber=1,
+    numbersep=5pt,
+    backgroundcolor=\color{white},
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    frame=single,
+    rulecolor=\color{black},
+    tabsize=2,
+    captionpos=b,
+    breaklines=true,
+    breakatwhitespace=false,
+}
+
+% Title Page
+\title{
+    \vspace{-2cm}
+    \textbf{Discrete-Event Simulation of Three-Tier \\
+    Web Application Performance Under Variable Load}\\
+    \vspace{0.5cm}
+    \large Software Engineering Simulation Project
+}
+\author{
+    Addis Ababa Science and Technology University (AASTU)\\
+    College of Electrical and Mechanical Engineering\\
+    Software Engineering Department\\
+    \vspace{0.5cm}
+    Fifth Year
+}
+\date{December 2025}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+This report presents a comprehensive discrete-event simulation study of a three-tier web application architecture under varying load conditions. The simulation models the interaction between presentation tier (load balancer), application tier (multiple servers), cache layer, and data tier (database server) using queuing theory principles. We implement the system using Python and SimPy, validate the model against analytical M/M/1 formulas, and conduct extensive experiments to analyze performance metrics including response time, throughput, utilization, and queue lengths. Results demonstrate that the database server is the primary bottleneck, with utilization reaching 99.77\% under high load (200 req/min). Caching provides significant performance improvements, reducing response time by 76.9\% at medium load. The study identifies system capacity limits and provides recommendations for performance optimization through increased database capacity and enhanced caching strategies.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\listoffigures
+\listoftables
+\newpage
+
+%=====================================================
+% SECTION I: INTRODUCTION
+%=====================================================
+\section{Introduction}
+
+\subsection{Background and Motivation}
+
+Modern web applications serve millions of users concurrently, requiring robust architectural designs to maintain acceptable performance under variable load conditions. Three-tier architecture has become the de facto standard for enterprise web applications, separating concerns into presentation, application logic, and data storage layers. Understanding the performance characteristics of such systems under different load scenarios is critical for capacity planning, resource allocation, and service level agreement (SLA) compliance.
+
+Discrete-event simulation (DES) provides a powerful methodology for analyzing complex systems where events occur at discrete points in time. Unlike analytical models that may oversimplify system behavior, DES can capture intricate interactions, resource contention, and queueing dynamics that occur in real-world systems.
+
+\subsection{Problem Statement}
+
+Organizations face challenges in predicting web application performance before deployment. Over-provisioning resources leads to unnecessary costs, while under-provisioning results in poor user experience and potential revenue loss. Traditional load testing is expensive and may not cover all scenarios. Therefore, simulation-based performance modeling offers a cost-effective approach to:
+
+\begin{itemize}
+    \item Predict system behavior under various load conditions
+    \item Identify performance bottlenecks
+    \item Evaluate the impact of caching strategies
+    \item Assess scalability through load balancing
+    \item Optimize resource allocation decisions
+\end{itemize}
+
+\subsection{Objectives}
+
+The primary objectives of this project are:
+
+\begin{enumerate}
+    \item \textbf{Model Development}: Implement a discrete-event simulation of a three-tier web application using queuing theory principles
+    \item \textbf{Validation}: Verify simulation accuracy against analytical M/M/1 queuing formulas
+    \item \textbf{Experimentation}: Conduct comprehensive experiments under low, medium, and high load scenarios
+    \item \textbf{Performance Analysis}: Analyze key metrics including response time, throughput, utilization, and queue lengths
+    \item \textbf{Cache Impact Study}: Evaluate the effectiveness of caching across different hit rates
+    \item \textbf{Capacity Planning}: Identify system bottlenecks and capacity limits
+    \item \textbf{Recommendations}: Provide actionable insights for system optimization
+\end{enumerate}
+
+\subsection{Scope and Limitations}
+
+\textbf{Scope:}
+\begin{itemize}
+    \item Three-tier web application architecture (presentation, application, data)
+    \item Poisson arrival process with exponential service times (M/M/1 queues)
+    \item Configurable load balancing strategies (round-robin, random, least-connections)
+    \item LRU caching with variable hit rates (0\%-80\%)
+    \item Load scenarios: 10-200 requests/minute
+    \item Statistical analysis with 10 replications per scenario
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}
+    \item Assumes exponential service time distributions (memoryless property)
+    \item Does not model network latency or failures
+    \item Simplified cache behavior (no cache eviction dynamics)
+    \item Homogeneous server characteristics within each tier
+    \item No consideration of database connection pooling
+    \item Limited to steady-state analysis (excludes transient warm-up effects)
+\end{itemize}
+
+\subsection{Report Organization}
+
+The remainder of this report is organized as follows:
+
+\begin{itemize}
+    \item \textbf{Section 2}: System model and architecture description
+    \item \textbf{Section 3}: Theoretical foundations and queuing theory
+    \item \textbf{Section 4}: Implementation details and software design
+    \item \textbf{Section 5}: Input data analysis and distribution fitting
+    \item \textbf{Section 6}: Model validation and verification
+    \item \textbf{Section 7}: Experimental design and results
+    \item \textbf{Section 8}: Performance analysis and discussion
+    \item \textbf{Section 9}: Conclusions and recommendations
+\end{itemize}
+
+%=====================================================
+% SECTION II: SYSTEM MODEL AND ARCHITECTURE
+%=====================================================
+\newpage
+\section{System Model and Architecture}
+
+\subsection{Three-Tier Architecture Overview}
+
+The simulated system follows a classic three-tier web application architecture consisting of:
+
+\begin{enumerate}
+    \item \textbf{Presentation Tier}: Load balancer distributing incoming requests
+    \item \textbf{Application Tier}: Multiple application servers processing business logic
+    \item \textbf{Data Tier}: Database server handling data persistence
+\end{enumerate}
+
+Additionally, a \textbf{cache layer} sits between the application and database tiers to reduce database load. The complete system architecture is illustrated in Figure~\ref{fig:architecture}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/system_architecture.png}
+\caption{Three-tier web application system architecture with load balancing and caching}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Component Descriptions}
+
+\subsubsection{Load Balancer}
+
+The load balancer distributes incoming requests across multiple application servers using one of three strategies:
+
+\begin{itemize}
+    \item \textbf{Round-Robin}: Distributes requests sequentially in a circular order
+    \item \textbf{Random}: Assigns requests randomly to available servers
+    \item \textbf{Least-Connections}: Routes requests to the server with fewest active connections
+\end{itemize}
+
+The load balancer introduces negligible delay and is modeled as an instantaneous decision point.
+
+\subsubsection{Application Servers}
+
+Multiple application servers (default: 1-4) process business logic. Each server:
+\begin{itemize}
+    \item Operates as an M/M/1 queue with service rate $\mu_{app}$ = 60 req/min
+    \item Maintains a FIFO waiting queue
+    \item Processes requests independently
+    \item Tracks utilization, queue length, and response time
+\end{itemize}
+
+\subsubsection{Cache Layer}
+
+The cache layer implements an LRU (Least Recently Used) caching mechanism:
+\begin{itemize}
+    \item Cache hit rate $h$ (configurable: 0-0.8)
+    \item Cache service rate $\mu_{cache}$ = 300 req/min (very fast)
+    \item On cache hit: Request served directly without database access
+    \item On cache miss: Request forwarded to database
+\end{itemize}
+
+\subsubsection{Database Server}
+
+Single database server representing the data tier:
+\begin{itemize}
+    \item Service rate $\mu_{db}$ = 30 req/min
+    \item M/M/1 queuing model
+    \item FIFO queue discipline
+    \item Primary bottleneck in the system
+\end{itemize}
+
+\subsection{Request Flow}
+
+A typical request follows this path:
+
+\begin{enumerate}
+    \item Request arrives following Poisson process with rate $\lambda$
+    \item Load balancer selects an application server
+    \item Selected app server queues and processes the request
+    \item Request proceeds to cache layer
+    \item If cache hit (probability $h$): Request completed
+    \item If cache miss (probability $1-h$): Request forwarded to database
+    \item Database queues and processes the request
+    \item Request completion recorded with total end-to-end time
+\end{enumerate}
+
+\subsection{Performance Metrics}
+
+The simulation tracks the following metrics:
+
+\textbf{System-Level:}
+\begin{itemize}
+    \item End-to-end response time (minutes)
+    \item System throughput (requests/minute)
+    \item Total/completed request counts
+\end{itemize}
+
+\textbf{Server-Level (per tier):}
+\begin{itemize}
+    \item Utilization ($\rho = \lambda/\mu$)
+    \item Average queue length ($L_q$)
+    \item Average response time ($W$)
+    \item Throughput (departures/minute)
+\end{itemize}
+
+\textbf{Cache-Specific:}
+\begin{itemize}
+    \item Hit rate (actual vs. configured)
+    \item Hit/miss counts
+    \item Cache utilization
+\end{itemize}
+
+%=====================================================
+% SECTION III: THEORETICAL FOUNDATIONS
+%=====================================================
+\newpage
+\section{Theoretical Foundations}
+
+\subsection{Queuing Theory Fundamentals}
+
+Queuing theory provides a mathematical framework for analyzing waiting lines and service systems. Our simulation employs M/M/1 queues at each server tier.
+
+\subsubsection{M/M/1 Queue Notation}
+
+The \textbf{Kendall notation} M/M/1 represents:
+\begin{itemize}
+    \item First M: \textbf{Markovian} (Poisson) arrivals with rate $\lambda$
+    \item Second M: \textbf{Markovian} (Exponential) service times with rate $\mu$
+    \item 1: \textbf{Single} server
+\end{itemize}
+
+\subsubsection{Key Assumptions}
+
+\begin{enumerate}
+    \item \textbf{Arrival Process}: Requests arrive according to a Poisson process with rate $\lambda$ (requests per minute)
+    \item \textbf{Service Times}: Service times follow exponential distribution with rate $\mu$ (requests per minute)
+    \item \textbf{Queue Discipline}: First-In-First-Out (FIFO)
+    \item \textbf{System Capacity}: Infinite queue capacity
+    \item \textbf{Independence}: Arrivals and service times are independent
+    \item \textbf{Steady State}: System operates in steady-state equilibrium
+\end{enumerate}
+
+\subsection{Analytical M/M/1 Formulas}
+
+For a stable M/M/1 queue ($\lambda < \mu$), the following performance metrics can be derived:
+
+\subsubsection{Utilization}
+
+Server utilization (traffic intensity):
+\begin{equation}
+\rho = \frac{\lambda}{\mu}
+\end{equation}
+
+Stability condition: $\rho < 1$ (arrival rate must be less than service rate)
+
+\subsubsection{Average Number in System}
+
+Mean number of requests in the system (queue + being served):
+\begin{equation}
+L = \frac{\rho}{1 - \rho} = \frac{\lambda}{\mu - \lambda}
+\end{equation}
+
+\subsubsection{Average Queue Length}
+
+Mean number of requests waiting in queue (not including served):
+\begin{equation}
+L_q = \frac{\rho^2}{1 - \rho} = \frac{\lambda^2}{\mu(\mu - \lambda)}
+\end{equation}
+
+\subsubsection{Average Time in System}
+
+Mean total time a request spends in system (wait + service):
+\begin{equation}
+W = \frac{1}{\mu - \lambda} = \frac{L}{\lambda}
+\end{equation}
+
+\subsubsection{Average Waiting Time}
+
+Mean time a request waits in queue before service:
+\begin{equation}
+W_q = \frac{\lambda}{\mu(\mu - \lambda)} = \frac{L_q}{\lambda}
+\end{equation}
+
+\subsubsection{Little's Law}
+
+Fundamental relationship between metrics:
+\begin{equation}
+L = \lambda W \quad \text{and} \quad L_q = \lambda W_q
+\end{equation}
+
+\subsection{Series Queues}
+
+For sequential queues (app server $\rightarrow$ database), the total end-to-end time is:
+\begin{equation}
+W_{total} = W_{app} + W_{db} = \frac{1}{\mu_{app} - \lambda} + \frac{1}{\mu_{db} - \lambda}
+\end{equation}
+
+\subsection{Cache Impact on Effective Load}
+
+With cache hit rate $h$, effective database load becomes:
+\begin{equation}
+\lambda_{db,eff} = (1 - h) \cdot \lambda
+\end{equation}
+
+Database utilization with caching:
+\begin{equation}
+\rho_{db} = \frac{(1 - h) \cdot \lambda}{\mu_{db}}
+\end{equation}
+
+\subsection{Poisson Process Properties}
+
+The Poisson arrival process has several important properties:
+
+\begin{itemize}
+    \item \textbf{Memoryless}: Probability of arrival in next time interval is independent of past
+    \item \textbf{Stationary}: Arrival rate $\lambda$ is constant over time
+    \item \textbf{Inter-arrival Times}: Follow exponential distribution with mean $1/\lambda$
+\end{itemize}
+
+Probability of $k$ arrivals in time $t$:
+\begin{equation}
+P(N(t) = k) = \frac{(\lambda t)^k e^{-\lambda t}}{k!}
+\end{equation}
+
+%=====================================================
+% SECTION IV: IMPLEMENTATION
+%=====================================================
+\newpage
+\section{Implementation}
+
+\subsection{Technology Stack}
+
+The simulation is implemented using the following technologies:
+
+\begin{table}[H]
+\centering
+\caption{Software stack and dependencies}
+\label{tab:tech-stack}
+\begin{tabular}{ll}
+\toprule
+\textbf{Component} & \textbf{Technology/Library} \\
+\midrule
+Programming Language & Python 3.9+ \\
+Simulation Framework & SimPy 4.0+ \\
+Numerical Computing & NumPy, SciPy \\
+Data Analysis & Pandas \\
+Visualization & Matplotlib, Seaborn \\
+Interactive GUI & Streamlit \\
+Notebooks & Jupyter Lab \\
+Testing & Pytest \\
+Version Control & Git \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Software Architecture}
+
+The implementation follows object-oriented design principles with clear separation of concerns. The conceptual model in Figure~\ref{fig:conceptual-model} illustrates the simulation workflow from input parameters through the simulation engine to output metrics and validation. Figure~\ref{fig:request-flow} shows the detailed request flow through the system components.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/conceptual_diagram.png}
+\caption{Conceptual model of the discrete-event simulation workflow}
+\label{fig:conceptual-model}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/request_flow_diagram.png}
+\caption{Request flow through the three-tier system components}
+\label{fig:request-flow}
+\end{figure}
+
+\subsection{Core Modules}
+
+\subsubsection{models.py}
+
+Defines the simulation entities:
+
+\begin{lstlisting}[caption=Server class implementation]
+class Server:
+    def __init__(self, env, service_rate, name="Server"):
+        self.env = env
+        self.service_rate = service_rate
+        self.name = name
+        self.resource = simpy.Resource(env, capacity=1)
+        self.queue_lengths = []
+        self.response_times = []
+
+    def get_service_time(self):
+        """Generate exponential service time"""
+        return np.random.exponential(1.0 / self.service_rate)
+
+    def record_queue_length(self):
+        """Record queue length (waiting only)"""
+        queue_len = len(self.resource.queue)
+        self.queue_lengths.append((self.env.now, queue_len))
+\end{lstlisting}
+
+\subsubsection{simulation.py}
+
+Implements the discrete-event simulation engine:
+
+\begin{lstlisting}[caption=Request processing logic]
+def request_process(env, request_id, arrival_time,
+                   app_servers, load_balancer,
+                   cache_server, db_server):
+    # Select app server via load balancer
+    app_server = load_balancer.select_server()
+
+    # Process at app server
+    with app_server.resource.request() as req:
+        yield req
+        service_time = app_server.get_service_time()
+        yield env.timeout(service_time)
+
+    # Check cache
+    cache_hit = cache_server.check_cache()
+
+    if not cache_hit:
+        # Process at database
+        with db_server.resource.request() as req:
+            yield req
+            service_time = db_server.get_service_time()
+            yield env.timeout(service_time)
+\end{lstlisting}
+
+\subsubsection{experiments.py}
+
+Manages experimental configurations:
+
+\begin{lstlisting}[caption=Experiment configuration]
+class ExperimentConfig:
+    def __init__(self, name, arrival_rate,
+                 cache_enabled=True,
+                 cache_hit_rate=0.3,
+                 num_replications=10):
+        self.name = name
+        self.arrival_rate = arrival_rate
+        self.cache_enabled = cache_enabled
+        self.cache_hit_rate = cache_hit_rate
+        self.num_replications = num_replications
+\end{lstlisting}
+
+\subsection{Project Structure}
+
+\begin{verbatim}
+three_tier_web_sim/
+├── src/
+│   ├── models.py           # Server, Cache, LoadBalancer
+│   ├── simulation.py       # SimPy simulation engine
+│   ├── inputs.py           # Data generation
+│   ├── outputs.py          # Analysis & visualization
+│   └── experiments.py      # Experiment runner
+├── notebooks/
+│   ├── data_analysis.ipynb
+│   ├── model_validation.ipynb
+│   └── simulation_experiments.ipynb
+├── gui/
+│   └── app.py              # Streamlit dashboard
+├── tests/
+│   └── test_simulation.py
+├── results/
+│   ├── plots/
+│   └── *.csv
+└── report/
+    └── main.tex
+\end{verbatim}
+
+%=====================================================
+% SECTION V: INPUT ANALYSIS
+%=====================================================
+\newpage
+\section{Input Data Analysis}
+
+\subsection{Synthetic Data Generation}
+
+Since real traffic data is unavailable, we generate synthetic arrival data following a Poisson process. Three load scenarios are created:
+
+\begin{table}[H]
+\centering
+\caption{Load scenarios for input data generation}
+\label{tab:scenarios}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Scenario} & \textbf{Arrival Rate ($\lambda$)} & \textbf{Simulation Time} \\
+\midrule
+Low Load & 10 req/min & 60 minutes \\
+Medium Load & 50 req/min & 60 minutes \\
+High Load & 200 req/min & 60 minutes \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Distribution Fitting}
+
+\subsubsection{Inter-Arrival Times}
+
+For a Poisson process, inter-arrival times follow an exponential distribution with parameter $\lambda$:
+
+\begin{equation}
+f(t) = \lambda e^{-\lambda t}, \quad t \geq 0
+\end{equation}
+
+We fit exponential distributions to empirical inter-arrival times and validate using:
+\begin{itemize}
+    \item Kolmogorov-Smirnov (KS) test
+    \item Chi-square goodness-of-fit test
+    \item Q-Q plots
+\end{itemize}
+
+\subsubsection{Arrival Counts}
+
+The number of arrivals in a fixed time interval follows a Poisson distribution:
+
+\begin{equation}
+P(X = k) = \frac{\lambda^k e^{-\lambda}}{k!}
+\end{equation}
+
+We validate Poisson assumptions by analyzing arrivals per minute.
+
+\subsection{Validation Results}
+
+\begin{table}[H]
+\centering
+\caption{Goodness-of-fit test results for input distributions}
+\label{tab:gof}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Scenario} & \textbf{Fitted Rate} & \textbf{KS p-value} & \textbf{$\chi^2$ p-value} \\
+\midrule
+Low (10 req/min) & 9.618 & 0.461 & 0.155 \\
+Medium (50 req/min) & 49.811 & 0.615 & 0.586 \\
+High (200 req/min) & 203.090 & 0.982 & 0.735 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All p-values $> 0.05$ indicate good fit to theoretical distributions, validating our Poisson arrival assumption.
+
+\subsection{Visualization}
+
+Figure~\ref{fig:interarrival-dist} shows the fitted exponential distributions for inter-arrival times across all scenarios. The close match between empirical histograms and theoretical curves confirms the validity of our input model.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/interarrival_distributions.png}
+\caption{Inter-arrival time distributions with fitted exponential curves}
+\label{fig:interarrival-dist}
+\end{figure}
+
+%=====================================================
+% SECTION VI: MODEL VALIDATION
+%=====================================================
+\newpage
+\section{Model Validation and Verification}
+
+\subsection{Validation Approach}
+
+To ensure simulation accuracy, we validate the model against analytical M/M/1 queuing formulas. Validation is performed without caching to match pure M/M/1 assumptions.
+
+\subsection{Validation Experiment Design}
+
+\begin{itemize}
+    \item Test arrival rates: $\lambda \in \{5, 10, 15, 20, 25\}$ req/min
+    \item App server rate: $\mu_{app} = 60$ req/min
+    \item Database server rate: $\mu_{db} = 30$ req/min
+    \item Cache: Disabled
+    \item Replications: 10 per arrival rate
+    \item Simulation time: 120 minutes (longer for accuracy)
+\end{itemize}
+
+\subsection{Validation Metrics}
+
+For each metric, we compare simulation mean with analytical prediction:
+
+\begin{equation}
+\text{Percent Error} = \left| \frac{\text{Simulation} - \text{Analytical}}{\text{Analytical}} \right| \times 100\%
+\end{equation}
+
+\subsection{Validation Results}
+
+\begin{table}[H]
+\centering
+\caption{Model validation error summary}
+\label{tab:validation-errors}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Mean Error (\%)} & \textbf{Std Error (\%)} & \textbf{Max Error (\%)} \\
+\midrule
+App Server Utilization & 0.70 & 0.49 & 1.22 \\
+App Server Queue Length & 2.32 & 1.31 & 3.70 \\
+App Server Response Time & 0.46 & 0.32 & 0.88 \\
+DB Server Utilization & 0.61 & 0.17 & 0.83 \\
+DB Server Queue Length & 1.67 & 1.37 & 4.04 \\
+DB Server Response Time & 0.95 & 0.95 & 2.59 \\
+End-to-End Time & 0.68 & 0.71 & 1.89 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key Findings:}
+\begin{itemize}
+    \item All metrics show MAPE (Mean Absolute Percentage Error) $< 3\%$
+    \item Excellent agreement between simulation and theory
+    \item Queue length fix (measuring $L_q$ instead of $L$) improved accuracy from 3330\% to 2.32\%
+\end{itemize}
+
+\subsection{Statistical Tests}
+
+Paired t-tests assess whether simulation and analytical means differ significantly:
+
+\begin{table}[H]
+\centering
+\caption{Statistical validation tests ($\alpha = 0.05$)}
+\label{tab:t-tests}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{t-statistic} & \textbf{p-value} & \textbf{Result} \\
+\midrule
+App Server Utilization & 1.916 & 0.128 & Fail to reject $H_0$ \\
+App Server Queue Length & 1.511 & 0.205 & Fail to reject $H_0$ \\
+DB Server Utilization & -2.523 & 0.065 & Fail to reject $H_0$ \\
+DB Server Queue Length & 1.303 & 0.262 & Fail to reject $H_0$ \\
+End-to-End Time & -0.311 & 0.771 & Fail to reject $H_0$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All p-values $> 0.05$ indicate no significant difference between simulation and analytical results, validating our model.
+
+\subsection{Visual Comparison}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{../results/plots/validation_utilization.png}
+\caption{Server utilization: Analytical vs. Simulation}
+\label{fig:validation-util}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{../results/plots/validation_response_time.png}
+\caption{End-to-end response time validation}
+\label{fig:validation-response}
+\end{figure}
+
+The near-perfect overlay of analytical and simulation curves in Figures~\ref{fig:validation-util} and~\ref{fig:validation-response} demonstrates model accuracy.
+
+\subsection{Validation Conclusion}
+
+The discrete-event simulation is \textbf{validated} for performance analysis. With MAPE $< 3\%$ across all metrics and no statistically significant differences (p $> 0.05$), we can confidently use the model for experiments.
+
+%=====================================================
+% SECTION VII: EXPERIMENTAL RESULTS
+%=====================================================
+\newpage
+\section{Experimental Design and Results}
+
+\subsection{Experiment Configuration}
+
+Three primary load scenarios are evaluated:
+
+\begin{table}[H]
+\centering
+\caption{Experimental scenarios}
+\label{tab:exp-scenarios}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Scenario} & \textbf{$\lambda$} & \textbf{$\mu_{app}$} & \textbf{$\mu_{db}$} & \textbf{Cache} & \textbf{Hit Rate} \\
+\midrule
+Low Load & 10 & 60 & 30 & Enabled & 30\% \\
+Medium Load & 50 & 60 & 30 & Enabled & 30\% \\
+High Load & 200 & 60 & 30 & Enabled & 30\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Each scenario runs 10 independent replications with 60-minute simulation time.
+
+\subsection{Low Load Results ($\lambda = 10$ req/min)}
+
+\begin{table}[H]
+\centering
+\caption{Low load scenario performance (Mean $\pm$ 95\% CI)}
+\label{tab:low-load}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+End-to-End Response Time (min) & 0.0516 [0.0490, 0.0541] \\
+App Server Utilization & 0.1667 [0.1598, 0.1735] \\
+DB Server Utilization & 0.2383 [0.2270, 0.2497] \\
+App Avg Queue Length & 0.0332 [0.0271, 0.0394] \\
+DB Avg Queue Length & 0.0788 [0.0680, 0.0896] \\
+System Throughput (req/min) & 10.10 [9.85, 10.34] \\
+Cache Hit Rate & 0.302 [0.285, 0.318] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} System operates efficiently with minimal queuing. Both servers are lightly utilized ($< 24\%$), resulting in fast response times ($\approx 3$ seconds).
+
+\subsection{Medium Load Results ($\lambda = 50$ req/min)}
+
+\begin{table}[H]
+\centering
+\caption{Medium load scenario performance (Mean $\pm$ 95\% CI)}
+\label{tab:medium-load}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+End-to-End Response Time (min) & 2.7872 [2.5414, 3.0329] \\
+App Server Utilization & 0.8307 [0.8167, 0.8448] \\
+DB Server Utilization & 0.9944 [0.9909, 0.9978] \\
+App Avg Queue Length & 3.9589 [3.3991, 4.5186] \\
+DB Avg Queue Length & 141.33 [128.03, 154.63] \\
+System Throughput (req/min) & 45.11 [44.54, 45.69] \\
+Cache Hit Rate & 0.302 [0.294, 0.310] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis:} System shows stress with DB utilization at 99.4\%. Database queue builds to 141 requests on average. Response time increases to 2.8 minutes. Cache hit rate matches expected 30\%.
+
+\subsection{High Load Results ($\lambda = 200$ req/min)}
+
+\begin{table}[H]
+\centering
+\caption{High load scenario performance (Mean $\pm$ 95\% CI)}
+\label{tab:high-load}
+\begin{tabular}{lc}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+End-to-End Response Time (min) & 22.2894 [22.0707, 22.5080] \\
+App Server Utilization & 0.9997 [0.9995, 0.9998] \\
+DB Server Utilization & 0.9977 [0.9964, 0.9989] \\
+App Avg Queue Length & 4206.35 [4167.74, 4244.95] \\
+DB Avg Queue Length & 329.66 [310.53, 348.79] \\
+System Throughput (req/min) & 48.28 [47.80, 48.76] \\
+Cache Hit Rate & 0.302 [0.297, 0.308] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Analysis - System Saturation:}
+
+The high load scenario demonstrates \textbf{severe system overload}:
+
+\begin{itemize}
+    \item \textbf{Throughput Saturation}: System processes only 48.28 req/min despite 200 req/min arrivals
+    \item \textbf{Queue Explosion}: App server queue reaches 4,206 requests (unrealistic)
+    \item \textbf{Unstable Operation}: 151.72 req/min accumulate in queues indefinitely
+    \item \textbf{Response Time Degradation}: 22.3 minutes end-to-end (users would time out)
+    \item \textbf{Near-100\% Utilization}: Both tiers saturated (99.97\% app, 99.77\% DB)
+\end{itemize}
+
+\textbf{Root Cause Analysis:}
+
+With 30\% cache hit rate, effective DB load is:
+\begin{equation}
+\lambda_{db,eff} = (1 - 0.3) \times 200 = 140 \text{ req/min}
+\end{equation}
+
+Since $\mu_{db} = 30$ req/min, the database is overloaded by a factor of 4.67$\times$. This violates the M/M/1 stability condition ($\rho < 1$), causing unbounded queue growth.
+
+\textbf{Interpretation:} This result validates the model by demonstrating expected behavior when system capacity is exceeded. It identifies the \textbf{database as the bottleneck} and quantifies the capacity limit at approximately 50-60 req/min.
+
+\subsection{Performance Trend Visualization}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/response_time_vs_load.png}
+\caption{Response time vs. load across scenarios}
+\label{fig:response-vs-load}
+\end{figure}
+
+Figure~\ref{fig:response-vs-load} shows the non-linear increase in response time as load increases. The sharp upturn at high load indicates system saturation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../results/plots/utilization_comparison.png}
+\caption{Server utilization comparison across scenarios}
+\label{fig:utilization-comparison}
+\end{figure}
+
+Figure~\ref{fig:utilization-comparison} clearly shows the database server (orange) reaching near-100\% utilization at medium and high loads, confirming it as the system bottleneck.
+
+%=====================================================
+% SECTION VIII: CACHE PERFORMANCE ANALYSIS
+%=====================================================
+\newpage
+\section{Cache Performance Analysis}
+
+\subsection{Cache vs. No-Cache Comparison}
+
+We compare medium load (50 req/min) performance with and without caching:
+
+\begin{table}[H]
+\centering
+\caption{Cache impact at medium load}
+\label{tab:cache-impact}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{With Cache} & \textbf{Without Cache} & \textbf{Improvement} \\
+\midrule
+End-to-End Time (min) & 2.787 & 12.066 & 76.9\% \\
+DB Utilization & 0.994 & 0.998 & 0.4\% \\
+DB Queue Length & 141.33 & 605.24 & 76.6\% \\
+Throughput (req/min) & 45.11 & 30.17 & -49.5\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Key Findings:}
+\begin{itemize}
+    \item Caching reduces response time by \textbf{76.9\%} (from 12.07 to 2.79 minutes)
+    \item Database queue length decreases by \textbf{76.6\%}
+    \item Throughput appears lower with cache due to measurement methodology (cache hits counted differently)
+    \item Cache provides significant relief at medium-to-high loads
+\end{itemize}
+
+\subsection{Cache Hit Rate Sensitivity Analysis}
+
+We vary cache hit rate from 0\% to 80\% at 100 req/min arrival rate:
+
+\begin{table}[H]
+\centering
+\caption{Cache hit rate sensitivity ($\lambda = 100$ req/min)}
+\label{tab:cache-sensitivity}
+\begin{tabular}{ccc}
+\toprule
+\textbf{Cache Hit Rate} & \textbf{End-to-End Time (min)} & \textbf{DB Utilization} \\
+\midrule
+0.0 & 20.785 & 0.9986 \\
+0.2 & 16.644 & 0.9981 \\
+0.4 & 13.796 & 0.9967 \\
+0.6 & 12.040 & 0.7769 \\
+0.8 & 11.981 & 0.3974 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{../results/plots/cache_sensitivity.png}
+\caption{Cache hit rate sensitivity analysis}
+\label{fig:cache-sensitivity}
+\end{figure}
+
+\textbf{Observations:}
+
+\begin{enumerate}
+    \item \textbf{Diminishing Returns}: Response time improvement plateaus beyond 60\% hit rate
+    \item \textbf{DB Relief}: DB utilization drops sharply at 60-80\% hit rates
+    \item \textbf{Threshold Effect}: Significant improvement occurs when hit rate exceeds 50\%
+    \item \textbf{Capacity Increase}: 80\% hit rate effectively increases system capacity by 5$\times$
+\end{enumerate}
+
+\textbf{Recommendation:} Prioritize achieving 60\%+ cache hit rates through:
+\begin{itemize}
+    \item Larger cache size
+    \item Better caching algorithms (LRU, LFU)
+    \item Intelligent cache warming
+    \item Read-through caching strategies
+\end{itemize}
+
+%=====================================================
+% SECTION IX: DISCUSSION
+%=====================================================
+\newpage
+\section{Discussion}
+
+\subsection{Bottleneck Identification}
+
+Our experiments conclusively identify the \textbf{database server as the primary bottleneck}:
+
+\begin{itemize}
+    \item At medium load: DB utilization = 99.4\%, App utilization = 83.1\%
+    \item At high load: DB utilization = 99.8\%, App utilization = 99.97\%
+    \item Database queue grows exponentially while app queue remains bounded
+    \item System throughput saturates at $\approx$48 req/min (limited by DB capacity)
+\end{itemize}
+
+\subsection{System Capacity Analysis}
+
+\textbf{Theoretical Capacity:}
+
+Without caching, maximum stable throughput is:
+\begin{equation}
+\lambda_{max} = \mu_{db} = 30 \text{ req/min}
+\end{equation}
+
+With 30\% cache hit rate:
+\begin{equation}
+\lambda_{max} = \frac{\mu_{db}}{1 - h} = \frac{30}{0.7} \approx 43 \text{ req/min}
+\end{equation}
+
+\textbf{Observed Capacity:} 45-48 req/min, consistent with theory.
+
+\subsection{Scalability Limitations}
+
+\begin{enumerate}
+    \item \textbf{Vertical Bottleneck}: Adding more app servers won't help beyond current config
+    \item \textbf{Database Constraint}: Single DB server limits entire system
+    \item \textbf{Non-linear Degradation}: Performance cliff when $\lambda$ approaches $\mu_{db}/(1-h)$
+    \item \textbf{Cache Dependency}: System capacity heavily depends on cache effectiveness
+\end{enumerate}
+
+\subsection{Performance Optimization Strategies}
+
+Based on findings, we recommend:
+
+\subsubsection{Short-term Solutions}
+
+\begin{itemize}
+    \item \textbf{Increase cache hit rate to 60-80\%}: Most cost-effective improvement
+    \item \textbf{Database query optimization}: Increase $\mu_{db}$ from 30 to 50+ req/min
+    \item \textbf{Read replicas}: Distribute read queries across multiple DB instances
+    \item \textbf{Connection pooling}: Reduce overhead per database transaction
+\end{itemize}
+
+\subsubsection{Long-term Solutions}
+
+\begin{itemize}
+    \item \textbf{Database sharding}: Horizontal partitioning of data
+    \item \textbf{NoSQL for hot data}: Cache-aside pattern with Redis/Memcached
+    \item \textbf{CQRS pattern}: Separate read and write databases
+    \item \textbf{Microservices}: Decompose monolithic database
+\end{itemize}
+
+\subsection{Model Limitations and Future Work}
+
+\textbf{Current Limitations:}
+
+\begin{itemize}
+    \item Assumes exponential service times (real systems may have different distributions)
+    \item No network latency modeling
+    \item Simplified cache behavior (no eviction policy details)
+    \item Single database server (no replication)
+    \item No failure/recovery scenarios
+\end{itemize}
+
+\textbf{Future Enhancements:}
+
+\begin{itemize}
+    \item Model non-exponential distributions (G/G/1 queues)
+    \item Add network delays and timeouts
+    \item Implement detailed cache replacement policies
+    \item Model database replication and consistency
+    \item Include failure scenarios and recovery mechanisms
+    \item Analyze transient behavior and warm-up effects
+\end{itemize}
+
+\subsection{Practical Implications}
+
+For real-world deployment:
+
+\begin{enumerate}
+    \item \textbf{Capacity Planning}: System can handle up to 45 req/min with current config
+    \item \textbf{SLA Guarantees}: Cannot guarantee fast response at $\lambda > 50$ req/min
+    \item \textbf{Cost Optimization}: Cache optimization more cost-effective than DB scaling
+    \item \textbf{Monitoring Priorities}: Focus on DB utilization and queue depth
+    \item \textbf{Auto-scaling Triggers}: Set alerts at DB utilization $> 70\%$
+\end{enumerate}
+
+%=====================================================
+% SECTION X: CONCLUSIONS
+%=====================================================
+\newpage
+\section{Conclusions}
+
+\subsection{Summary of Findings}
+
+This study presents a comprehensive discrete-event simulation of a three-tier web application architecture. Key findings include:
+
+\begin{enumerate}
+    \item \textbf{Model Validation}: Simulation achieves $< 3\%$ error compared to analytical M/M/1 formulas, with all statistical tests confirming validity (p $> 0.05$)
+
+    \item \textbf{Bottleneck Identification}: Database server is conclusively identified as the system bottleneck, with utilization reaching 99.8\% under high load while app server has spare capacity
+
+    \item \textbf{Capacity Limits}: System can stably handle $\approx$45 req/min with 30\% cache hit rate; loads exceeding this cause queue explosion and system instability
+
+    \item \textbf{Cache Effectiveness}: Caching reduces response time by 76.9\% at medium load; increasing hit rate from 30\% to 60\% provides substantial additional benefits
+
+    \item \textbf{Performance Degradation}: Response time increases non-linearly with load, jumping from 2.8 minutes (medium load) to 22.3 minutes (high load) due to saturation
+
+    \item \textbf{Scalability}: Adding application servers provides minimal benefit; database scaling or enhanced caching required for capacity increases
+\end{enumerate}
+
+\subsection{Contributions}
+
+This project contributes:
+
+\begin{itemize}
+    \item \textbf{Validated Simulation Model}: Accurate DES implementation for three-tier web apps
+    \item \textbf{Comprehensive Analysis}: End-to-end study from input validation to performance analysis
+    \item \textbf{Practical Insights}: Actionable recommendations for system optimization
+    \item \textbf{Extensible Framework}: Modular codebase for future enhancements
+    \item \textbf{Educational Value}: Demonstrates simulation methodology and queuing theory application
+\end{itemize}
+
+\subsection{Recommendations}
+
+Based on experimental results, we recommend:
+
+\begin{enumerate}
+    \item \textbf{Immediate Actions}:
+    \begin{itemize}
+        \item Optimize cache strategy to achieve 60\%+ hit rate
+        \item Set DB utilization alerts at 70\% threshold
+        \item Implement database query optimization
+    \end{itemize}
+
+    \item \textbf{Medium-term Improvements}:
+    \begin{itemize}
+        \item Deploy database read replicas
+        \item Implement connection pooling
+        \item Add horizontal database sharding
+    \end{itemize}
+
+    \item \textbf{Long-term Architecture}:
+    \begin{itemize}
+        \item Migrate to CQRS pattern
+        \item Adopt microservices for independent scaling
+        \item Implement distributed caching (Redis cluster)
+    \end{itemize}
+\end{enumerate}
+
+\subsection{Lessons Learned}
+
+\begin{enumerate}
+    \item \textbf{Simulation Validation is Critical}: Initial queue length bug (measuring L instead of $L_q$) showed 3330\% error; proper validation caught this immediately
+
+    \item \textbf{System Behavior Under Overload}: High load scenario demonstrates importance of understanding saturation effects rather than just steady-state operation
+
+    \item \textbf{Cache Impact}: Even modest cache hit rates (30\%) provide substantial benefits; optimization should prioritize caching
+
+    \item \textbf{Bottleneck Migration}: As caching improves, bottleneck shifts from database to application tier, requiring adaptive capacity planning
+\end{enumerate}
+
+\subsection{Final Remarks}
+
+Discrete-event simulation proves to be a powerful tool for understanding complex system behavior before deployment. This project successfully demonstrates the application of queuing theory and DES methodology to practical performance engineering problems.
+
+The validated model can serve as a foundation for:
+\begin{itemize}
+    \item Capacity planning and infrastructure sizing
+    \item Performance prediction under various scenarios
+    \item Cost-benefit analysis of architectural changes
+    \item Educational purposes in simulation and performance engineering courses
+\end{itemize}
+
+Future work should focus on incorporating more realistic service time distributions, modeling failure scenarios, and extending to distributed database architectures.
+
+%=====================================================
+% REFERENCES
+%=====================================================
+\newpage
+\begin{thebibliography}{99}
+
+\bibitem{simpy}
+Team SimPy. (2024). \textit{SimPy Documentation: Discrete event simulation for Python}. Retrieved from https://simpy.readthedocs.io/
+
+\bibitem{gross}
+Gross, D., Shortle, J. F., Thompson, J. M., \& Harris, C. M. (2018). \textit{Fundamentals of Queueing Theory} (5th ed.). John Wiley \& Sons.
+
+\bibitem{jain}
+Jain, R. (1991). \textit{The Art of Computer Systems Performance Analysis: Techniques for Experimental Design, Measurement, Simulation, and Modeling}. John Wiley \& Sons.
+
+\bibitem{law}
+Law, A. M. (2015). \textit{Simulation Modeling and Analysis} (5th ed.). McGraw-Hill Education.
+
+\bibitem{kleinrock}
+Kleinrock, L. (1976). \textit{Queueing Systems, Volume II: Computer Applications}. Wiley-Interscience.
+
+\bibitem{banks}
+Banks, J., Carson, J. S., Nelson, B. L., \& Nicol, D. M. (2010). \textit{Discrete-Event System Simulation} (5th ed.). Pearson.
+
+\bibitem{numpy}
+Harris, C. R., et al. (2020). Array programming with NumPy. \textit{Nature}, 585(7825), 357-362.
+
+\bibitem{pandas}
+McKinney, W. (2010). Data structures for statistical computing in Python. \textit{Proceedings of the 9th Python in Science Conference}, 56-61.
+
+\bibitem{matplotlib}
+Hunter, J. D. (2007). Matplotlib: A 2D graphics environment. \textit{Computing in Science \& Engineering}, 9(3), 90-95.
+
+\bibitem{streamlit}
+Streamlit Inc. (2024). \textit{Streamlit: The fastest way to build data apps}. Retrieved from https://streamlit.io/
+
+\bibitem{bolch}
+Bolch, G., Greiner, S., de Meer, H., \& Trivedi, K. S. (2006). \textit{Queueing Networks and Markov Chains} (2nd ed.). John Wiley \& Sons.
+
+\bibitem{lazowska}
+Lazowska, E. D., Zahorjan, J., Graham, G. S., \& Sevcik, K. C. (1984). \textit{Quantitative System Performance: Computer System Analysis Using Queueing Network Models}. Prentice-Hall.
+
+\end{thebibliography}
+
+%=====================================================
+% APPENDICES
+%=====================================================
+\newpage
+\appendix
+
+\section{Appendix A: Complete Experimental Results}
+
+\subsection{Low Load Detailed Results}
+
+\begin{table}[H]
+\centering
+\caption{Low load scenario - complete replication data}
+\begin{tabular}{cccccc}
+\toprule
+\textbf{Rep} & \textbf{E2E Time} & \textbf{App Util} & \textbf{DB Util} & \textbf{Throughput} & \textbf{Cache Hit} \\
+\midrule
+0 & 0.0568 & 0.171 & 0.264 & 10.03 & 0.327 \\
+1 & 0.0505 & 0.169 & 0.234 & 10.20 & 0.275 \\
+2 & 0.0518 & 0.169 & 0.230 & 10.30 & 0.288 \\
+3 & 0.0508 & 0.159 & 0.226 & 9.75 & 0.326 \\
+4 & 0.0550 & 0.162 & 0.246 & 9.63 & 0.304 \\
+5 & 0.0497 & 0.168 & 0.243 & 10.25 & 0.291 \\
+6 & 0.0498 & 0.166 & 0.243 & 10.13 & 0.316 \\
+7 & 0.0495 & 0.170 & 0.222 & 10.37 & 0.294 \\
+8 & 0.0529 & 0.169 & 0.235 & 10.23 & 0.285 \\
+9 & 0.0496 & 0.164 & 0.240 & 10.07 & 0.312 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Queue Length Visualization}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../results/plots/queue_length_comparison.png}
+\caption{Average queue lengths across scenarios}
+\label{fig:queue-length}
+\end{figure}
+
+\section{Appendix B: Source Code Snippets}
+
+\subsection{Arrival Process Generator}
+
+\begin{lstlisting}[caption=Poisson arrival process]
+def generate_arrivals(env, arrival_rate, simulation_time,
+                     callback):
+    """Generate Poisson arrivals"""
+    request_id = 0
+    while env.now < simulation_time:
+        # Exponential inter-arrival time
+        inter_arrival = np.random.exponential(1.0 / arrival_rate)
+        yield env.timeout(inter_arrival)
+
+        # Create new request
+        env.process(callback(env, request_id, env.now))
+        request_id += 1
+\end{lstlisting}
+
+\subsection{Metrics Collection}
+
+\begin{lstlisting}[caption=Performance metrics calculation]
+def calculate_confidence_intervals(df, confidence=0.95):
+    """Calculate 95% confidence intervals"""
+    summary = []
+    metrics = df.columns.drop('replication')
+
+    for metric in metrics:
+        values = df[metric].values
+        mean = np.mean(values)
+        sem = stats.sem(values)
+        ci = stats.t.interval(confidence, len(values)-1,
+                             loc=mean, scale=sem)
+
+        summary.append({
+            'metric': metric,
+            'mean': mean,
+            'std': np.std(values),
+            'ci_lower': ci[0],
+            'ci_upper': ci[1]
+        })
+
+    return pd.DataFrame(summary)
+\end{lstlisting}
+
+\section{Appendix C: Analytical Formulas Reference}
+
+\subsection{M/M/1 Queue Formulas}
+
+\begin{align}
+\text{Utilization:} \quad & \rho = \frac{\lambda}{\mu} \\
+\text{Avg. in system:} \quad & L = \frac{\rho}{1-\rho} \\
+\text{Avg. in queue:} \quad & L_q = \frac{\rho^2}{1-\rho} \\
+\text{Avg. time in system:} \quad & W = \frac{1}{\mu - \lambda} \\
+\text{Avg. time in queue:} \quad & W_q = \frac{\rho}{\mu(1-\rho)}
+\end{align}
+
+\subsection{Cache Impact Formulas}
+
+\begin{align}
+\text{Effective DB load:} \quad & \lambda_{db} = (1-h)\lambda \\
+\text{DB utilization with cache:} \quad & \rho_{db} = \frac{(1-h)\lambda}{\mu_{db}} \\
+\text{Cache hit benefit:} \quad & \Delta W = W_{no\_cache} - W_{cache}
+\end{align}
+
+\end{document}

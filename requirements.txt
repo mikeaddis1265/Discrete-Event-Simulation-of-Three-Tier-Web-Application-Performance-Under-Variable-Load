@@ -1,0 +1,9 @@
+simpy>=4.0.0
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+streamlit
+pytest
+jupyterlab

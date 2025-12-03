@@ -1,0 +1,8 @@
+Metric,Mean Error (%),Std Error (%),Max Error (%)
+App Server Queue Length,2.32,1.31,3.7
+App Server Response Time,0.46,0.32,0.88
+App Server Utilization,0.7,0.49,1.22
+DB Server Queue Length,1.67,1.37,4.04
+DB Server Response Time,0.95,0.95,2.59
+DB Server Utilization,0.61,0.17,0.83
+End-to-End Time,0.68,0.71,1.89
