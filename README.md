@@ -420,7 +420,7 @@ df = pd.read_csv('data/raw/synthetic_arrivals.csv')  # Works
 
 ---
 
-## 📚 References
+##  References
 
 - SimPy Documentation: https://simpy.readthedocs.io/
 - Queuing Theory: M/M/1 models
@@ -429,35 +429,4 @@ df = pd.read_csv('data/raw/synthetic_arrivals.csv')  # Works
 
 ---
 
-## 👥 Author
-
-Software Engineering Course Project
-AASTU - Fifth Year
-
 ---
-
-## 📄 License
-
-Educational use only - Academic project
-
----
-
-## 🤝 Contributing
-
-This is an academic project. For suggestions or improvements:
-1. Review the code
-2. Test changes locally
-3. Document modifications
-
----
-
-## 📞 Support
-
-For issues or questions:
-- Check `docs/user_manual.md`
-- Review notebook documentation
-- Check troubleshooting section above
-
----
-
-**Last Updated**: December 2025
